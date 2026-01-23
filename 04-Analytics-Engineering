@@ -1,1 +1,56 @@
+#Schema for Omni-channel Campaign Performance Analysis
 
+CREATE SCHEMA IF NOT EXISTS marketing_analytics
+USE marketing_analytics;
+
+CREATE TABLE IF NOT EXISTS dim_campaigns (
+  campaign_id STRING,
+  campaign_name STRING,
+  channel STRING, -- e.g., Programmatic, Social, Email
+  tactic STRING,  -- e.g., Retargeting, Prospecting
+  start_date DATE,
+  end_date DATE
+) 
+COMMENT 'Metadata for all marketing campaigns';
+
+CREATE TABLE IF NOT EXISTS dim_geography (
+  geo_id STRING,
+  region STRING,
+  country STRING
+);
+
+CREATE TABLE IF NOT EXISTS fact_daily_performance (
+  date DATE,
+  campaign_id STRING,
+  geo_id STRING,
+  spend DOUBLE,        -- Daily spend
+  impressions BIGINT,
+  clicks BIGINT,
+  conversions INT,
+  revenue DOUBLE       -- For ROAS calculations
+)
+COMMENT 'Daily grain performance metrics for all channels';
+
+CREATE OR REPLACE VIEW v_campaign_performance_kpis AS
+SELECT 
+    c.campaign_name,
+    c.channel,
+    f.date,
+    SUM(f.spend) AS total_spend,
+    SUM(f.conversions) AS total_conversions,
+    SUM(f.revenue) AS total_revenue,
+    -- KPI Calculations
+    CASE WHEN SUM(f.spend) > 0 THEN SUM(f.revenue) / SUM(f.spend) ELSE 0 END AS roas,
+    CASE WHEN SUM(f.conversions) > 0 THEN SUM(f.spend) / SUM(f.conversions) ELSE 0 END AS cpa
+FROM fact_daily_performance f
+JOIN dim_campaigns c ON f.campaign_id = c.campaign_id
+GROUP BY ALL;
+
+SELECT 
+    c.campaign_name, 
+    f.date, 
+    f.spend, 
+    f.conversions
+FROM fact_daily_performance f
+JOIN dim_campaigns c ON f.campaign_id = c.campaign_id
+ORDER BY f.date DESC;
